@@ -846,48 +846,85 @@ function sortComposite(key) {
   document.getElementById('composite-grid').innerHTML = sorted.map((s, i) => renderCompositeCard(s, i + 1)).join('');
 }
 
-/* ════════════ Load sectors from CSV (via server) ════════════ */
+/* ════════════ CSV parser (browser-side) ════════════ */
+function parseCSVLine(line) {
+  const fields = []; let cur = '', inQ = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (c === '"') { inQ = !inQ; continue; }
+    if (c === ',' && !inQ) { fields.push(cur.trim()); cur = ''; continue; }
+    cur += c;
+  }
+  fields.push(cur.trim()); return fields;
+}
+function numCSV(s) {
+  if (!s || s === 'N/A') return 0;
+  return parseFloat(s.replace(/[+%,$]/g, '')) || 0;
+}
+function parseSectorsCSV(text) {
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  const metaLine   = lines[lines.length - 1];
+  const dateMatch  = metaLine.match(/as of\s+([^"]+)/i);
+  const updatedAt  = dateMatch ? dateMatch[1].trim() : '';
+  const dataLines  = lines.slice(1, -1);
+  const sectorList = []; let spy = null;
+  for (const line of dataLines) {
+    const f = parseCSVLine(line);
+    if (f.length < 22) continue;
+    const row = {
+      ticker: f[0], name: f[1],
+      price: numCSV(f[3]), chg: numCSV(f[4]),
+      alpha: numCSV(f[8]), w52: numCSV(f[9]),
+      ma100: numCSV(f[10]), ma50: numCSV(f[11]),
+      ma150: numCSV(f[12]), ma20: numCSV(f[13]),
+      rsi: numCSV(f[14]), vs1y: numCSV(f[15]),
+      vsYtd: numCSV(f[16]), stoch: numCSV(f[21]),
+      trend: f[6], opinion: f[7],
+      direction: f[19], strength: f[20],
+    };
+    if (row.ticker === 'SPY') spy = row; else sectorList.push(row);
+  }
+  return { sectors: sectorList, spy, updatedAt };
+}
+
+/* ════════════ Load sectors from GitHub CSV ════════════ */
+const CSV_URL = 'https://raw.githubusercontent.com/nditzik/SECTORS-HITMAP/main/data/sectors.csv';
+
 async function loadSectors() {
   try {
-    const res  = await fetch('http://localhost:3458/api/sectors', { cache: 'no-store' });
-    if (!res.ok) throw new Error('server error');
-    const data = await res.json();
+    const res  = await fetch(CSV_URL + '?_=' + Date.now(), { cache: 'no-store' });
+    if (!res.ok) throw new Error('fetch error');
+    const text = await res.text();
+    const data = parseSectorsCSV(text);
 
-    // Populate sectors array
     sectors.length = 0;
     data.sectors.forEach(s => sectors.push(s));
 
-    // Update SPY globals
     if (data.spy) {
       SPY_ALPHA = data.spy.alpha;
       SPY_52W   = data.spy.w52;
       SPY_RSI   = data.spy.rsi;
-      // Update SPY banner static metrics
       document.querySelector('#spy-live-price').textContent = '$' + data.spy.price.toFixed(2);
       const spyChgEl = document.querySelector('#spy-live-chg');
       spyChgEl.textContent = (data.spy.chg >= 0 ? '▲ ' : '▼ ') + Math.abs(data.spy.chg).toFixed(2) + '%';
       spyChgEl.style.color = data.spy.chg >= 0 ? '#3fb950' : '#f85149';
     }
 
-    // Update page subtitle with CSV date
     if (data.updatedAt) {
       document.getElementById('page-subtitle').innerHTML =
         `נתוני Barchart מ-${data.updatedAt} &nbsp;|&nbsp; מקור: Barchart.com`;
-      // Also update legend reference
       document.querySelectorAll('.legend strong').forEach(el => {
         el.textContent = `צבע לפי Wtd Alpha יחסי ל-SPY (+${SPY_ALPHA.toFixed(2)}):`;
       });
     }
 
-    // Pre-compute scores and render
     sectors.forEach(s => { s.scores = computeScores(s); });
     sortMomentum('alpha');
     sortComposite('total');
 
   } catch (e) {
-    // Fallback: show error in subtitle
     document.getElementById('page-subtitle').innerHTML =
-      '<span style="color:#f85149">שגיאה בטעינת נתונים – הפעל את start-server.bat</span>';
+      '<span style="color:#f85149">שגיאה בטעינת נתונים</span>';
   }
 }
 
@@ -931,7 +968,7 @@ function applyPrice(ticker, price, chgPct) {
   }
 }
 
-function fetchWithTimeout(url, ms = 7000) {
+function fetchWithTimeout(url, ms = 9000) {
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), ms);
   return fetch(url, { cache: 'no-store', signal: controller.signal })
@@ -941,27 +978,28 @@ function fetchWithTimeout(url, ms = 7000) {
 async function fetchLivePrices() {
   setLiveStatus('loading', 'מעדכן מחירים...');
   const symbols = ALL_TICKERS.join(',');
-  const YF_BASE = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbols}`;
+  const yfUrl   = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbols}`;
+  const proxy   = 'https://api.allorigins.win/raw?url=';
 
-  // Try local Node.js server first (start-server.bat), then nothing else works from file://
   try {
-    const res = await fetchWithTimeout(`http://localhost:3458/api/quotes?symbols=${symbols}`, 6000);
-    if (res.ok) {
-      const json   = await res.json();
-      const quotes = json?.quotes;
-      if (quotes?.length) {
-        quotes.forEach(q => applyPrice(q.symbol, q.price, q.chgPct));
-        const now = new Date().toLocaleTimeString('he-IL', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
-        document.getElementById('live-updated').textContent = 'עודכן ב-' + now;
-        setLiveStatus('ok', 'מחירים חיים ✓');
-        return;
-      }
-    }
-  } catch (_) {}
+    const res = await fetchWithTimeout(proxy + encodeURIComponent(yfUrl), 12000);
+    if (!res.ok) throw new Error();
+    const json    = await res.json();
+    const results = json?.quoteResponse?.result;
+    if (!results?.length) throw new Error();
 
-  // Server not running
-  setLiveStatus('error', 'שרת לא פעיל');
-  document.getElementById('live-updated').textContent = '← לחץ פעמיים על start-server.bat';
+    results.forEach(q => {
+      if (q.regularMarketPrice != null)
+        applyPrice(q.symbol, q.regularMarketPrice, q.regularMarketChangePercent ?? 0);
+    });
+
+    const now = new Date().toLocaleTimeString('he-IL', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+    document.getElementById('live-updated').textContent = 'עודכן ב-' + now;
+    setLiveStatus('ok', 'מחירים חיים ✓');
+  } catch (_) {
+    setLiveStatus('error', 'מחירים חיים לא זמינים');
+    document.getElementById('live-updated').textContent = '';
+  }
 }
 
 // Load sectors from CSV first, then start live prices
