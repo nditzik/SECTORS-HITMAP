@@ -1,0 +1,974 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>מפת חום סקטורים – מומנטום יחסי ל-SPY</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --border: #30363d;
+      --text-primary: #e6edf3;
+      --text-muted: #8b949e;
+      --spy-line: #58a6ff;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text-primary);
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      min-height: 100vh;
+      padding: 24px;
+    }
+
+    header { text-align: center; margin-bottom: 24px; }
+    header h1 { font-size: 1.6rem; font-weight: 700; margin-bottom: 4px; }
+    header .subtitle { color: var(--text-muted); font-size: 0.82rem; }
+
+    /* SPY banner – modern redesign */
+    .spy-banner {
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      gap: 0;
+      background: linear-gradient(120deg, #0d1f3c 0%, #0f2040 40%, #111827 100%);
+      border: 1px solid rgba(88,166,255,0.35);
+      border-radius: 14px;
+      padding: 0;
+      margin-bottom: 24px;
+      box-shadow: 0 0 32px rgba(88,166,255,0.08), inset 0 1px 0 rgba(255,255,255,0.04);
+    }
+    /* subtle animated glow line on top */
+    .spy-banner::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, #58a6ff 40%, #a0d0ff 60%, transparent);
+    }
+
+    /* left ticker block */
+    .spy-ticker-block {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px 28px;
+      border-left: 1px solid rgba(88,166,255,0.18);
+      background: rgba(88,166,255,0.06);
+      min-width: 110px;
+      gap: 4px;
+      flex-shrink: 0;
+    }
+    .spy-ticker-block .spy-tick {
+      font-size: 1.8rem;
+      font-weight: 900;
+      color: var(--spy-line);
+      letter-spacing: 1px;
+      line-height: 1;
+    }
+    .spy-ticker-block .spy-sub {
+      font-size: 0.6rem;
+      color: rgba(88,166,255,0.6);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      font-weight: 600;
+    }
+
+    /* price block */
+    .spy-price-block {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px 28px;
+      border-left: 1px solid rgba(255,255,255,0.06);
+      gap: 2px;
+      flex-shrink: 0;
+    }
+    .spy-price-block .spy-price {
+      font-size: 1.7rem;
+      font-weight: 800;
+      color: var(--text-primary);
+      line-height: 1;
+    }
+    .spy-price-block .spy-chg {
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: #f85149;
+    }
+    .spy-price-block .spy-chg-label {
+      font-size: 0.6rem;
+      color: var(--text-muted);
+    }
+
+    /* metrics strip */
+    .spy-metrics {
+      display: flex;
+      flex: 1;
+      justify-content: space-evenly;
+      align-items: center;
+      flex-wrap: wrap;
+      padding: 16px 20px;
+      gap: 4px;
+    }
+    .spy-metric {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+      padding: 8px 14px;
+      border-radius: 8px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.05);
+      min-width: 72px;
+    }
+    .spy-metric .sm-val {
+      font-size: 1rem;
+      font-weight: 800;
+      line-height: 1;
+    }
+    .spy-metric .sm-label {
+      font-size: 0.6rem;
+      color: var(--text-muted);
+      text-align: center;
+      letter-spacing: 0.3px;
+    }
+    .spy-metric .sm-bar {
+      width: 100%;
+      height: 3px;
+      background: rgba(255,255,255,0.07);
+      border-radius: 2px;
+      overflow: hidden;
+      margin-top: 2px;
+    }
+    .spy-metric .sm-bar-fill {
+      height: 100%;
+      border-radius: 2px;
+      background: var(--spy-line);
+    }
+
+    /* benchmark label */
+    .spy-bench-tag {
+      position: absolute;
+      top: 8px;
+      right: 12px;
+      font-size: 0.55rem;
+      font-weight: 700;
+      color: rgba(88,166,255,0.5);
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+    }
+
+    /* live status bar */
+    .live-bar {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      margin-bottom: 16px;
+      font-size: 0.72rem;
+    }
+    .live-dot {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 10px;
+      border-radius: 99px;
+      font-weight: 700;
+      font-size: 0.68rem;
+      letter-spacing: 0.3px;
+    }
+    .live-dot.loading { background: rgba(210,153,34,0.15); color: #d29922; border: 1px solid rgba(210,153,34,0.3); }
+    .live-dot.ok      { background: rgba(63,185,80,0.12);  color: #3fb950; border: 1px solid rgba(63,185,80,0.3); }
+    .live-dot.error   { background: rgba(248,81,73,0.12);  color: #f85149; border: 1px solid rgba(248,81,73,0.3); }
+    .live-dot .pulse {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: currentColor;
+      animation: pulse 1.4s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%,100% { opacity: 1; transform: scale(1); }
+      50%      { opacity: 0.4; transform: scale(0.7); }
+    }
+    .live-dot.ok .pulse { animation: none; }
+    .refresh-btn {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      border-radius: 6px;
+      padding: 3px 10px;
+      cursor: pointer;
+      font-size: 0.7rem;
+      transition: all 0.15s;
+    }
+    .refresh-btn:hover { border-color: var(--spy-line); color: var(--spy-line); }
+    .updated-at { color: var(--text-muted); }
+
+    /* Tabs */
+    .tabs {
+      display: flex;
+      justify-content: center;
+      gap: 6px;
+      margin-bottom: 20px;
+    }
+    .tab-btn {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      padding: 8px 22px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      font-weight: 600;
+      transition: all 0.15s;
+    }
+    .tab-btn:hover { border-color: var(--spy-line); color: var(--text-primary); }
+    .tab-btn.active { background: #1c2d3f; border-color: var(--spy-line); color: var(--spy-line); }
+
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    /* Legend */
+    .legend {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      justify-content: center;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+      font-size: 0.76rem;
+      color: var(--text-muted);
+    }
+    .legend-item { display: flex; align-items: center; gap: 5px; }
+    .legend-box { width: 13px; height: 13px; border-radius: 3px; }
+
+    /* Sort controls */
+    .controls {
+      display: flex;
+      justify-content: center;
+      gap: 7px;
+      margin-bottom: 18px;
+      flex-wrap: wrap;
+    }
+    .controls button {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text-primary);
+      padding: 5px 13px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.76rem;
+      transition: all 0.15s;
+    }
+    .controls button:hover, .controls button.active {
+      background: #21262d; border-color: var(--spy-line); color: var(--spy-line);
+    }
+
+    /* Grid */
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(255px, 1fr)); gap: 13px; }
+
+    /* Card */
+    .card {
+      border-radius: 12px;
+      padding: 15px 17px;
+      border: 1px solid transparent;
+      transition: transform 0.15s, box-shadow 0.15s;
+      position: relative;
+    }
+    .card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.5); }
+
+    .tier-strong-green { background: #0d2818; border-color: #2ea043; }
+    .tier-green        { background: #0f2318; border-color: #3fb950; }
+    .tier-light-green  { background: #112318; border-color: #56d364; }
+    .tier-yellow       { background: #2a1f00; border-color: #d29922; }
+    .tier-orange       { background: #2a1400; border-color: #e3882e; }
+    .tier-red          { background: #220c0c; border-color: #f85149; }
+
+    .card-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 10px; }
+    .card-ticker { font-size: 1.35rem; font-weight: 800; line-height: 1; }
+    .card-name   { font-size: 0.68rem; color: var(--text-muted); margin-top: 3px; max-width: 155px; }
+    .card-price-block { text-align: left; }
+    .card-price  { font-size: 1.05rem; font-weight: 700; }
+    .card-change { font-size: 0.76rem; font-weight: 600; text-align: left; }
+
+    .pos { color: #3fb950; }
+    .neg { color: #f85149; }
+    .neu { color: var(--text-muted); }
+
+    .alpha-row { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; }
+    .alpha-label { font-size: 0.66rem; color: var(--text-muted); width: 72px; flex-shrink: 0; }
+    .alpha-bar-track { flex: 1; height: 7px; background: rgba(255,255,255,0.07); border-radius: 4px; overflow: hidden; }
+    .alpha-bar-fill  { height: 100%; border-radius: 4px; }
+    .alpha-val { font-size: 0.78rem; font-weight: 700; width: 38px; text-align: left; flex-shrink: 0; }
+
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 5px;
+      margin-top: 9px;
+    }
+    .metric-chip { background: rgba(255,255,255,0.05); border-radius: 6px; padding: 5px 6px; text-align: center; }
+    .metric-chip .chip-val   { font-size: 0.8rem; font-weight: 700; }
+    .metric-chip .chip-label { font-size: 0.58rem; color: var(--text-muted); display: block; margin-top: 1px; }
+
+    .tooltip-label {
+      font-size: 0.58rem;
+      color: var(--text-muted);
+      border-bottom: 1px dashed var(--text-muted);
+      cursor: help;
+    }
+
+    .badges { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 9px; }
+    .badge { font-size: 0.6rem; font-weight: 600; padding: 2px 7px; border-radius: 99px; background: rgba(255,255,255,0.07); color: var(--text-muted); }
+    .badge.buy    { background: rgba(46,160,67,0.18); color: #3fb950; }
+    .badge.sell   { background: rgba(248,81,73,0.18);  color: #f85149; }
+    .badge.neutral{ background: rgba(210,153,34,0.18); color: #d29922; }
+    .badge-lbl { opacity: 0.6; font-weight: 400; margin-left: 2px; }
+
+    .rank-strip {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-top: 9px; padding-top: 7px; border-top: 1px solid rgba(255,255,255,0.06);
+    }
+    .rank-label { font-size: 0.66rem; color: var(--text-muted); }
+    .rank-val   { font-size: 0.76rem; font-weight: 700; }
+    .stoch-track { width: 72px; height: 5px; background: rgba(255,255,255,0.07); border-radius: 3px; overflow: hidden; }
+    .stoch-fill  { height: 100%; border-radius: 3px; }
+
+    /* ── Composite score tab ── */
+    .score-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(255px, 1fr)); gap: 13px; }
+
+    .score-card {
+      border-radius: 12px;
+      padding: 18px;
+      border: 1px solid transparent;
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+    .score-card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.5); }
+
+    .score-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+    .score-ticker { font-size: 1.35rem; font-weight: 800; }
+    .score-name   { font-size: 0.68rem; color: var(--text-muted); margin-top: 2px; }
+
+    .big-score {
+      font-size: 2.8rem;
+      font-weight: 900;
+      line-height: 1;
+    }
+    .score-label { font-size: 0.64rem; color: var(--text-muted); margin-top: 2px; }
+
+    .score-rank-badge {
+      font-size: 0.7rem;
+      font-weight: 700;
+      padding: 3px 10px;
+      border-radius: 99px;
+      background: rgba(255,255,255,0.07);
+    }
+
+    /* breakdown bars */
+    .breakdown { margin-top: 14px; display: flex; flex-direction: column; gap: 7px; }
+    .brow { display: flex; align-items: center; gap: 8px; }
+    .brow-label { font-size: 0.66rem; color: var(--text-muted); width: 100px; flex-shrink: 0; text-align: right; }
+    .brow-track { flex: 1; height: 8px; background: rgba(255,255,255,0.07); border-radius: 4px; overflow: hidden; }
+    .brow-fill  { height: 100%; border-radius: 4px; transition: width 0.5s; }
+    .brow-val   { font-size: 0.7rem; font-weight: 700; width: 30px; text-align: left; flex-shrink: 0; }
+
+    .weight-tag {
+      font-size: 0.58rem;
+      color: var(--spy-line);
+      background: rgba(88,166,255,0.1);
+      border-radius: 4px;
+      padding: 1px 4px;
+      width: 26px;
+      text-align: center;
+      flex-shrink: 0;
+    }
+
+    .score-divider { height: 1px; background: rgba(255,255,255,0.06); margin: 12px 0; }
+
+    .ma-chips { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin-top: 4px; }
+    .ma-chip { background: rgba(255,255,255,0.05); border-radius: 5px; padding: 4px 6px; text-align: center; }
+    .ma-chip .mc-val   { font-size: 0.75rem; font-weight: 700; }
+    .ma-chip .mc-label { font-size: 0.58rem; color: var(--text-muted); }
+
+    .score-controls { display: flex; justify-content: center; gap: 7px; margin-bottom: 18px; flex-wrap: wrap; }
+    .score-controls button {
+      background: var(--surface); border: 1px solid var(--border);
+      color: var(--text-primary); padding: 5px 13px; border-radius: 6px;
+      cursor: pointer; font-size: 0.76rem; transition: all 0.15s;
+    }
+    .score-controls button:hover, .score-controls button.active {
+      background: #21262d; border-color: var(--spy-line); color: var(--spy-line);
+    }
+
+    .weight-legend {
+      display: flex; gap: 14px; flex-wrap: wrap; justify-content: center;
+      margin-bottom: 18px; font-size: 0.72rem; color: var(--text-muted);
+    }
+    .weight-legend span { display: flex; align-items: center; gap: 5px; }
+    .wdot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+    footer { text-align: center; margin-top: 32px; font-size: 0.7rem; color: var(--text-muted); }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>מפת חום סקטורים – מומנטום יחסי לשוק</h1>
+  <div class="subtitle" id="page-subtitle">טוען נתונים... &nbsp;|&nbsp; מקור: Barchart.com</div>
+</header>
+
+<!-- SPY Benchmark – modern redesign -->
+<div class="spy-banner">
+  <div class="spy-bench-tag">ספסל ייחוס</div>
+
+  <!-- Ticker -->
+  <div class="spy-ticker-block">
+    <div class="spy-tick">SPY</div>
+    <div class="spy-sub">S&P 500</div>
+  </div>
+
+  <!-- Price -->
+  <div class="spy-price-block">
+    <div class="spy-price" id="spy-live-price">$656.65</div>
+    <div class="spy-chg" id="spy-live-chg">▼ 0.48%</div>
+    <div class="spy-chg-label">שינוי יומי</div>
+  </div>
+
+  <!-- Metrics -->
+  <div class="spy-metrics">
+    <div class="spy-metric">
+      <div class="sm-val" style="color:#58a6ff">+12.53</div>
+      <div class="sm-label">Wtd Alpha</div>
+      <div class="sm-bar"><div class="sm-bar-fill" style="width:17%;background:#58a6ff"></div></div>
+    </div>
+    <div class="spy-metric">
+      <div class="sm-val" style="color:#3fb950">+16.12%</div>
+      <div class="sm-label">52W %Chg</div>
+      <div class="sm-bar"><div class="sm-bar-fill" style="width:22%;background:#3fb950"></div></div>
+    </div>
+    <div class="spy-metric">
+      <div class="sm-val" style="color:#d29922">33.37</div>
+      <div class="sm-label">14D RSI</div>
+      <div class="sm-bar"><div class="sm-bar-fill" style="width:33%;background:#d29922"></div></div>
+    </div>
+    <div class="spy-metric">
+      <div class="sm-val" style="color:#f85149">6.45%</div>
+      <div class="sm-label">Stoch %K</div>
+      <div class="sm-bar"><div class="sm-bar-fill" style="width:6%;background:#f85149"></div></div>
+    </div>
+    <div class="spy-metric">
+      <div class="sm-val" style="color:var(--text-muted)">$683.94</div>
+      <div class="sm-label">MA 50</div>
+      <div class="sm-bar"><div class="sm-bar-fill" style="width:96%;background:rgba(248,81,73,0.5)"></div></div>
+    </div>
+    <div class="spy-metric">
+      <div class="sm-val" style="color:var(--text-muted)">$681.86</div>
+      <div class="sm-label">MA 100</div>
+      <div class="sm-bar"><div class="sm-bar-fill" style="width:96%;background:rgba(248,81,73,0.5)"></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- Live status bar -->
+<div class="live-bar">
+  <span class="live-dot loading" id="live-status">
+    <span class="pulse"></span>
+    <span id="live-status-text">טוען מחירים חיים...</span>
+  </span>
+  <span class="updated-at" id="live-updated"></span>
+  <button class="refresh-btn" onclick="fetchLivePrices()">⟳ רענן</button>
+</div>
+
+<!-- Tabs -->
+<div class="tabs">
+  <button class="tab-btn active" onclick="switchTab('momentum')">מומנטום Alpha</button>
+  <button class="tab-btn" onclick="switchTab('composite')">ניקוד משוקלל</button>
+</div>
+
+<!-- ══════════════════════ TAB 1: Momentum ══════════════════════ -->
+<div id="tab-momentum" class="tab-content active">
+
+  <div class="legend">
+    <strong style="color:var(--text-primary)">צבע לפי Wtd Alpha יחסי ל-SPY (+12.53):</strong>
+    <div class="legend-item"><div class="legend-box" style="background:#2ea043"></div> חזק מאוד (&gt;+17)</div>
+    <div class="legend-item"><div class="legend-box" style="background:#3fb950"></div> חזק (+3 עד +17)</div>
+    <div class="legend-item"><div class="legend-box" style="background:#56d364"></div> מעל שוק (0 עד +3)</div>
+    <div class="legend-item"><div class="legend-box" style="background:#d29922"></div> ניטרלי</div>
+    <div class="legend-item"><div class="legend-box" style="background:#e3882e"></div> חלש (0 עד -3)</div>
+    <div class="legend-item"><div class="legend-box" style="background:#f85149"></div> חלש מאוד (&lt;-3)</div>
+  </div>
+
+  <div class="controls">
+    <button onclick="sortMomentum('alpha')" class="active" id="mbtn-alpha">Wtd Alpha ↓</button>
+    <button onclick="sortMomentum('52w')"  id="mbtn-52w">52W %Chg</button>
+    <button onclick="sortMomentum('ytd')"  id="mbtn-ytd">YTD vs IDX</button>
+    <button onclick="sortMomentum('1y')"   id="mbtn-1y">1Y vs IDX</button>
+    <button onclick="sortMomentum('rsi')"  id="mbtn-rsi">14D RSI</button>
+    <button onclick="sortMomentum('stoch')" id="mbtn-stoch">Stoch %K</button>
+  </div>
+
+  <div class="grid" id="momentum-grid"></div>
+</div>
+
+<!-- ══════════════════════ TAB 2: Composite ══════════════════════ -->
+<div id="tab-composite" class="tab-content">
+
+  <div class="weight-legend">
+    <strong style="color:var(--text-primary)">שקלול:</strong>
+    <span><div class="wdot" style="background:#58a6ff"></div>Alpha יחסי לשוק 30%</span>
+    <span><div class="wdot" style="background:#3fb950"></div>מומנטום מחיר 25%</span>
+    <span><div class="wdot" style="background:#d29922"></div>ממוצעים נעים 25%</span>
+    <span><div class="wdot" style="background:#bc8cff"></div>אינדיקטורים טכניים 20%</span>
+  </div>
+
+  <div class="score-controls">
+    <button onclick="sortComposite('total')" class="active" id="cbtn-total">ניקוד כולל ↓</button>
+    <button onclick="sortComposite('alpha_score')" id="cbtn-alpha">Alpha</button>
+    <button onclick="sortComposite('momentum_score')" id="cbtn-mom">מומנטום</button>
+    <button onclick="sortComposite('ma_score')" id="cbtn-ma">ממוצעים נעים</button>
+    <button onclick="sortComposite('indicator_score')" id="cbtn-ind">אינדיקטורים</button>
+  </div>
+
+  <div class="score-grid" id="composite-grid"></div>
+</div>
+
+<footer>
+  SPY Wtd Alpha = +12.53 &nbsp;|&nbsp; 1Y vs IDX / YTD vs IDX = ביצוע עודף מעל מדד ה-S&P 500 בנקודות אחוז
+</footer>
+
+<script>
+/* ─── Data ─── */
+let SPY_ALPHA = 12.53, SPY_52W = 16.12, SPY_RSI = 33.37;
+let sectors = [];
+
+/* ─── Helpers ─── */
+function getTier(relAlpha) {
+  if (relAlpha > 17) return 'strong-green';
+  if (relAlpha > 3)  return 'green';
+  if (relAlpha > 0)  return 'light-green';
+  if (relAlpha > -3) return 'yellow';
+  if (relAlpha > -8) return 'orange';
+  return 'red';
+}
+function barColor(v) {
+  if (v > 17) return '#2ea043';
+  if (v > 3)  return '#3fb950';
+  if (v > 0)  return '#56d364';
+  if (v > -3) return '#d29922';
+  if (v > -8) return '#e3882e';
+  return '#f85149';
+}
+function scoreColor(s) {
+  if (s >= 70) return '#2ea043';
+  if (s >= 55) return '#3fb950';
+  if (s >= 45) return '#d29922';
+  if (s >= 30) return '#e3882e';
+  return '#f85149';
+}
+function scoreTier(s) {
+  if (s >= 70) return 'strong-green';
+  if (s >= 55) return 'green';
+  if (s >= 45) return 'yellow';
+  if (s >= 30) return 'orange';
+  return 'red';
+}
+function colorVal(v, ref=0) { return v > ref ? 'pos' : v < ref ? 'neg' : 'neu'; }
+function stochColor(v) { return v >= 70 ? '#3fb950' : v >= 40 ? '#d29922' : '#f85149'; }
+function opinionClass(op) {
+  const pct = parseInt(op), isBuy = op.toLowerCase().includes('buy');
+  if (isBuy && pct >= 70) return 'buy';
+  if (!isBuy && pct >= 70) return 'sell';
+  return 'neutral';
+}
+function trendClass(t) { return t === 'Buy' ? 'buy' : 'sell'; }
+function norm(v, lo, hi) { return Math.max(0, Math.min(100, (v - lo) / (hi - lo) * 100)); }
+
+/* ─── Composite scoring ─── */
+function computeScores(s) {
+  // ── Alpha component (30%) ──
+  // Wtd Alpha relative to SPY (range roughly -18 to +58)
+  const alphaRel  = norm(s.alpha - SPY_ALPHA, -18, 58);   // 40% of alpha score
+  const vs1y_n    = norm(s.vs1y,  -18, 57);                // 35% of alpha score
+  const vsYtd_n   = norm(s.vsYtd, -8,  37);                // 25% of alpha score
+  const alpha_score = alphaRel * 0.40 + vs1y_n * 0.35 + vsYtd_n * 0.25;
+
+  // ── Momentum component (25%) ──
+  const w52_n   = norm(s.w52,   -2,  73);   // 50%
+  const rsi_n   = norm(s.rsi,   20,  80);   // 30%
+  const stoch_n = s.stoch;                   // 20% (already 0-100)
+  const momentum_score = w52_n * 0.50 + rsi_n * 0.30 + stoch_n * 0.20;
+
+  // ── Moving averages component (25%) ──
+  // Positive = price above MA → bullish
+  const vsMA20  = norm((s.price / s.ma20  - 1) * 100, -12, 12);
+  const vsMA50  = norm((s.price / s.ma50  - 1) * 100, -12, 12);
+  const vsMA100 = norm((s.price / s.ma100 - 1) * 100, -12, 12);
+  const vsMA150 = norm((s.price / s.ma150 - 1) * 100, -12, 12);
+  // Shorter MAs get slightly higher weight (more recent signal)
+  const ma_score = vsMA20 * 0.35 + vsMA50 * 0.30 + vsMA100 * 0.20 + vsMA150 * 0.15;
+
+  // ── Indicators component (20%) ──
+  // Trend: Buy=100, Sell=0
+  const trend_n = s.trend === 'Buy' ? 100 : 0;
+  // Opinion: parse "X% Buy/Sell" → bullish pct
+  const opPct   = parseInt(s.opinion);
+  const opBull  = s.opinion.toLowerCase().includes('buy') ? opPct : 100 - opPct;
+  // Direction: Strongest=100, Strong=80, Strengthening=65, Average=50, Weakening=35, Weakest=20
+  const dirMap  = { Strongest:100, Strong:80, Strengthening:65, Average:50, Weakening:35, Weakest:20 };
+  const dir_n   = dirMap[s.direction] ?? 50;
+  // Strength: Top 1%=100, Maximum=90, Good=75, Strong=70, Average=55, Soft=35, Weak=25, Minimum=10
+  const strMap  = { 'Top 1%':100, Maximum:90, Good:75, Strong:70, Average:55, Soft:35, Weak:25, Minimum:10 };
+  const str_n   = strMap[s.strength] ?? 50;
+  const indicator_score = trend_n * 0.30 + opBull * 0.30 + dir_n * 0.20 + str_n * 0.20;
+
+  const total = alpha_score * 0.30 + momentum_score * 0.25 + ma_score * 0.25 + indicator_score * 0.20;
+
+  return {
+    alpha_score:      Math.round(alpha_score),
+    momentum_score:   Math.round(momentum_score),
+    ma_score:         Math.round(ma_score),
+    indicator_score:  Math.round(indicator_score),
+    total:            Math.round(total),
+    // sub-components for display
+    alphaRel, vs1y_n, vsYtd_n,
+    w52_n, rsi_n, stoch_n,
+    vsMA20, vsMA50, vsMA100, vsMA150,
+    trend_n, opBull, dir_n, str_n,
+  };
+}
+
+/* pre-compute – runs after loadSectors() populates the array */
+
+/* ─── Tab switching ─── */
+function switchTab(tab) {
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + tab).classList.add('active');
+  event.target.classList.add('active');
+}
+
+/* ════════════ TAB 1 – Momentum cards ════════════ */
+function renderMomentumCard(s) {
+  const relAlpha = s.alpha - SPY_ALPHA;
+  const tier     = getTier(relAlpha);
+  const bc       = barColor(relAlpha);
+  const maxA     = 71.13;
+  const barPct   = Math.max(0, Math.min(100, s.alpha / maxA * 100));
+  const chgCls   = s.chg > 0 ? 'pos' : s.chg < 0 ? 'neg' : 'neu';
+  const rel52w   = s.w52 - SPY_52W;
+
+  return `
+  <div class="card tier-${tier}"
+       data-alpha="${s.alpha}" data-52w="${s.w52}" data-ytd="${s.vsYtd}"
+       data-rsi="${s.rsi}" data-stoch="${s.stoch}" data-1y="${s.vs1y}">
+    <div class="card-header">
+      <div>
+        <div class="card-ticker">${s.ticker}</div>
+        <div class="card-name">${s.name}</div>
+      </div>
+      <div class="card-price-block">
+        <div class="card-price" id="price-${s.ticker}">$${s.price.toFixed(2)}</div>
+        <div class="card-change ${chgCls}" id="chg-${s.ticker}">${s.chg >= 0 ? '+' : ''}${s.chg.toFixed(2)}%</div>
+      </div>
+    </div>
+
+    <div class="alpha-row">
+      <div class="alpha-label">Wtd Alpha</div>
+      <div class="alpha-bar-track"><div class="alpha-bar-fill" style="width:${barPct}%;background:${bc}"></div></div>
+      <div class="alpha-val ${relAlpha >= 0 ? 'pos' : 'neg'}">${s.alpha > 0 ? '+' : ''}${s.alpha.toFixed(1)}</div>
+    </div>
+    <div class="alpha-row" style="margin-top:-4px">
+      <div class="alpha-label" style="font-size:0.6rem">vs SPY</div>
+      <div class="alpha-bar-track"><div class="alpha-bar-fill" style="width:${Math.max(0,(relAlpha+SPY_ALPHA)/maxA*100)}%;background:${bc};opacity:0.45"></div></div>
+      <div class="alpha-val" style="font-size:0.7rem;color:${bc}">${relAlpha >= 0 ? '+' : ''}${relAlpha.toFixed(1)}</div>
+    </div>
+
+    <div class="metrics-grid">
+      <div class="metric-chip">
+        <div class="chip-val ${colorVal(rel52w, 0)}">${s.w52 >= 0 ? '+' : ''}${s.w52.toFixed(1)}%</div>
+        <span class="chip-label">52W %Chg</span>
+      </div>
+      <div class="metric-chip">
+        <div class="chip-val ${colorVal(s.vs1y, 0)}">${s.vs1y >= 0 ? '+' : ''}${s.vs1y.toFixed(1)}</div>
+        <span class="chip-label tooltip-label" title="ביצוע עודף מעל S&P 500 בשנה האחרונה (נקודות %)">1Y vs IDX ⓘ</span>
+      </div>
+      <div class="metric-chip">
+        <div class="chip-val ${colorVal(s.vsYtd, 0)}">${s.vsYtd >= 0 ? '+' : ''}${s.vsYtd.toFixed(1)}</div>
+        <span class="chip-label tooltip-label" title="ביצוע עודף מעל S&P 500 מתחילת שנה (נקודות %)">YTD vs IDX ⓘ</span>
+      </div>
+      <div class="metric-chip">
+        <div class="chip-val ${s.rsi >= 50 ? 'pos' : s.rsi <= 30 ? 'neg' : 'neu'}">${s.rsi.toFixed(1)}</div>
+        <span class="chip-label">14D RSI</span>
+      </div>
+      <div class="metric-chip">
+        <div class="chip-val" style="color:${stochColor(s.stoch)}">${s.stoch.toFixed(1)}%</div>
+        <span class="chip-label">Stoch %K</span>
+      </div>
+      <div class="metric-chip">
+        <div class="chip-val ${colorVal(rel52w, 0)}">${rel52w >= 0 ? '+' : ''}${rel52w.toFixed(1)}%</div>
+        <span class="chip-label">52W-SPY</span>
+      </div>
+    </div>
+
+    <div class="badges">
+      <span class="badge ${trendClass(s.trend)}"><span class="badge-lbl">מגמה:</span> ${s.trend}</span>
+      <span class="badge ${opinionClass(s.opinion)}"><span class="badge-lbl">דעה:</span> ${s.opinion}</span>
+      <span class="badge"><span class="badge-lbl">כיוון:</span> ${s.direction}</span>
+      <span class="badge"><span class="badge-lbl">חוזק:</span> ${s.strength}</span>
+    </div>
+
+    <div class="rank-strip">
+      <span class="rank-label">Stoch %K</span>
+      <div class="stoch-track"><div class="stoch-fill" style="width:${Math.min(100,s.stoch)}%;background:${stochColor(s.stoch)}"></div></div>
+      <span class="rank-val" style="color:${stochColor(s.stoch)}">${s.stoch.toFixed(0)}%</span>
+    </div>
+  </div>`;
+}
+
+let mSort = 'alpha';
+const mKeys = { alpha:'alpha', '52w':'w52', ytd:'vsYtd', rsi:'rsi', stoch:'stoch', '1y':'vs1y' };
+
+function sortMomentum(key) {
+  mSort = key;
+  document.querySelectorAll('#tab-momentum .controls button').forEach(b => b.classList.remove('active'));
+  document.getElementById('mbtn-' + key).classList.add('active');
+  const prop = mKeys[key];
+  const sorted = [...sectors].sort((a, b) => b[prop] - a[prop]);
+  document.getElementById('momentum-grid').innerHTML = sorted.map(renderMomentumCard).join('');
+}
+
+/* ════════════ TAB 2 – Composite cards (same compact style as momentum) ════════════ */
+function renderCompositeCard(s, rank) {
+  const sc      = s.scores;
+  const col     = scoreColor(sc.total);
+  const tier    = scoreTier(sc.total);
+  const chgCls2 = s.chg > 0 ? 'pos' : s.chg < 0 ? 'neg' : 'neu';
+
+  const maVs20  = (s.price / s.ma20  - 1) * 100;
+  const maVs50  = (s.price / s.ma50  - 1) * 100;
+  const maVs100 = (s.price / s.ma100 - 1) * 100;
+  const maVs150 = (s.price / s.ma150 - 1) * 100;
+
+  const rankTag = rank <= 3
+    ? ['🥇','🥈','🥉'][rank-1]
+    : `<span style="font-size:0.68rem;color:var(--text-muted)">#${rank}</span>`;
+
+  return `
+  <div class="card tier-${tier}"
+       data-total="${sc.total}" data-alpha_score="${sc.alpha_score}"
+       data-momentum_score="${sc.momentum_score}" data-ma_score="${sc.ma_score}"
+       data-indicator_score="${sc.indicator_score}">
+
+    <div class="card-header">
+      <div>
+        <div class="card-ticker">${s.ticker} ${rankTag}</div>
+        <div class="card-name">${s.name}</div>
+      </div>
+      <div class="card-price-block">
+        <div class="card-price" id="cprice-${s.ticker}">$${s.price.toFixed(2)}</div>
+        <div class="card-change ${chgCls2}" id="cchg-${s.ticker}">${s.chg >= 0 ? '+' : ''}${s.chg.toFixed(2)}%</div>
+      </div>
+    </div>
+
+    <!-- Total score bar -->
+    <div class="alpha-row">
+      <div class="alpha-label">ניקוד כולל</div>
+      <div class="alpha-bar-track"><div class="alpha-bar-fill" style="width:${sc.total}%;background:${col}"></div></div>
+      <div class="alpha-val" style="color:${col};width:46px">${sc.total}/100</div>
+    </div>
+
+    <!-- 4 sub-score chips -->
+    <div class="metrics-grid">
+      <div class="metric-chip">
+        <div class="chip-val" style="color:#58a6ff">${sc.alpha_score}</div>
+        <span class="chip-label">Alpha יחסי</span>
+      </div>
+      <div class="metric-chip">
+        <div class="chip-val" style="color:#3fb950">${sc.momentum_score}</div>
+        <span class="chip-label">מומנטום</span>
+      </div>
+      <div class="metric-chip">
+        <div class="chip-val" style="color:#d29922">${sc.ma_score}</div>
+        <span class="chip-label">ממוצעים נעים</span>
+      </div>
+      <div class="metric-chip">
+        <div class="chip-val" style="color:#bc8cff">${sc.indicator_score}</div>
+        <span class="chip-label">אינדיקטורים</span>
+      </div>
+    </div>
+
+    <!-- MA chips -->
+    <div class="ma-chips" style="margin-top:8px">
+      <div class="ma-chip">
+        <div class="mc-val ${maVs20 >= 0 ? 'pos' : 'neg'}">${maVs20 >= 0 ? '+' : ''}${maVs20.toFixed(1)}%</div>
+        <div class="mc-label">vs MA20</div>
+      </div>
+      <div class="ma-chip">
+        <div class="mc-val ${maVs50 >= 0 ? 'pos' : 'neg'}">${maVs50 >= 0 ? '+' : ''}${maVs50.toFixed(1)}%</div>
+        <div class="mc-label">vs MA50</div>
+      </div>
+      <div class="ma-chip">
+        <div class="mc-val ${maVs100 >= 0 ? 'pos' : 'neg'}">${maVs100 >= 0 ? '+' : ''}${maVs100.toFixed(1)}%</div>
+        <div class="mc-label">vs MA100</div>
+      </div>
+      <div class="ma-chip">
+        <div class="mc-val ${maVs150 >= 0 ? 'pos' : 'neg'}">${maVs150 >= 0 ? '+' : ''}${maVs150.toFixed(1)}%</div>
+        <div class="mc-label">vs MA150</div>
+      </div>
+    </div>
+
+    <!-- Badges with labels -->
+    <div class="badges">
+      <span class="badge ${trendClass(s.trend)}"><span class="badge-lbl">מגמה:</span> ${s.trend}</span>
+      <span class="badge ${opinionClass(s.opinion)}"><span class="badge-lbl">דעה:</span> ${s.opinion}</span>
+      <span class="badge"><span class="badge-lbl">כיוון:</span> ${s.direction}</span>
+      <span class="badge"><span class="badge-lbl">חוזק:</span> ${s.strength}</span>
+    </div>
+
+    <!-- Rank strip -->
+    <div class="rank-strip">
+      <span class="rank-label">ניקוד משוקלל</span>
+      <div class="stoch-track"><div class="stoch-fill" style="width:${sc.total}%;background:${col}"></div></div>
+      <span class="rank-val" style="color:${col}">${sc.total}/100</span>
+    </div>
+  </div>`;
+}
+
+let cSort = 'total';
+function sortComposite(key) {
+  cSort = key;
+  document.querySelectorAll('#tab-composite .score-controls button').forEach(b => b.classList.remove('active'));
+  document.getElementById('cbtn-' + (key === 'total' ? 'total' : key === 'alpha_score' ? 'alpha' : key === 'momentum_score' ? 'mom' : key === 'ma_score' ? 'ma' : 'ind')).classList.add('active');
+  const sorted = [...sectors].sort((a, b) => b.scores[key] - a.scores[key]);
+  document.getElementById('composite-grid').innerHTML = sorted.map((s, i) => renderCompositeCard(s, i + 1)).join('');
+}
+
+/* ════════════ Load sectors from CSV (via server) ════════════ */
+async function loadSectors() {
+  try {
+    const res  = await fetch('http://localhost:3458/api/sectors', { cache: 'no-store' });
+    if (!res.ok) throw new Error('server error');
+    const data = await res.json();
+
+    // Populate sectors array
+    sectors.length = 0;
+    data.sectors.forEach(s => sectors.push(s));
+
+    // Update SPY globals
+    if (data.spy) {
+      SPY_ALPHA = data.spy.alpha;
+      SPY_52W   = data.spy.w52;
+      SPY_RSI   = data.spy.rsi;
+      // Update SPY banner static metrics
+      document.querySelector('#spy-live-price').textContent = '$' + data.spy.price.toFixed(2);
+      const spyChgEl = document.querySelector('#spy-live-chg');
+      spyChgEl.textContent = (data.spy.chg >= 0 ? '▲ ' : '▼ ') + Math.abs(data.spy.chg).toFixed(2) + '%';
+      spyChgEl.style.color = data.spy.chg >= 0 ? '#3fb950' : '#f85149';
+    }
+
+    // Update page subtitle with CSV date
+    if (data.updatedAt) {
+      document.getElementById('page-subtitle').innerHTML =
+        `נתוני Barchart מ-${data.updatedAt} &nbsp;|&nbsp; מקור: Barchart.com`;
+      // Also update legend reference
+      document.querySelectorAll('.legend strong').forEach(el => {
+        el.textContent = `צבע לפי Wtd Alpha יחסי ל-SPY (+${SPY_ALPHA.toFixed(2)}):`;
+      });
+    }
+
+    // Pre-compute scores and render
+    sectors.forEach(s => { s.scores = computeScores(s); });
+    sortMomentum('alpha');
+    sortComposite('total');
+
+  } catch (e) {
+    // Fallback: show error in subtitle
+    document.getElementById('page-subtitle').innerHTML =
+      '<span style="color:#f85149">שגיאה בטעינת נתונים – הפעל את start-server.bat</span>';
+  }
+}
+
+/* ════════════ Live prices ════════════ */
+const ALL_TICKERS = ['SPY','SMH','XLE','XLK','XLI','XLU','XLC','XLB','XLY','XLP','XLRE','XLV','XLF'];
+
+function setLiveStatus(state, text) {
+  const el = document.getElementById('live-status');
+  el.className = 'live-dot ' + state;
+  el.querySelector('.pulse').style.display = state === 'ok' ? 'none' : 'block';
+  document.getElementById('live-status-text').textContent = text;
+}
+
+function applyPrice(ticker, price, chgPct) {
+  const priceStr = '$' + price.toFixed(2);
+  const sign     = chgPct >= 0 ? '+' : '';
+  const chgStr   = sign + chgPct.toFixed(2) + '%';
+  const cls      = chgPct > 0 ? 'pos' : chgPct < 0 ? 'neg' : 'neu';
+
+  // Momentum card
+  const pEl = document.getElementById('price-' + ticker);
+  const cEl = document.getElementById('chg-'   + ticker);
+  if (pEl) pEl.textContent = priceStr;
+  if (cEl) { cEl.textContent = chgStr; cEl.className = 'card-change ' + cls; }
+
+  // Composite card
+  const cpEl = document.getElementById('cprice-' + ticker);
+  const ccEl = document.getElementById('cchg-'   + ticker);
+  if (cpEl) cpEl.textContent = priceStr;
+  if (ccEl) { ccEl.textContent = chgStr; ccEl.className = cls; ccEl.style.fontSize = '0.76rem'; ccEl.style.fontWeight = '700'; }
+
+  // SPY banner
+  if (ticker === 'SPY') {
+    const sp = document.getElementById('spy-live-price');
+    const sc = document.getElementById('spy-live-chg');
+    if (sp) sp.textContent = priceStr;
+    if (sc) {
+      sc.textContent = (chgPct >= 0 ? '▲ ' : '▼ ') + Math.abs(chgPct).toFixed(2) + '%';
+      sc.style.color = chgPct >= 0 ? '#3fb950' : '#f85149';
+    }
+  }
+}
+
+function fetchWithTimeout(url, ms = 7000) {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), ms);
+  return fetch(url, { cache: 'no-store', signal: controller.signal })
+    .finally(() => clearTimeout(id));
+}
+
+async function fetchLivePrices() {
+  setLiveStatus('loading', 'מעדכן מחירים...');
+  const symbols = ALL_TICKERS.join(',');
+  const YF_BASE = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbols}`;
+
+  // Try local Node.js server first (start-server.bat), then nothing else works from file://
+  try {
+    const res = await fetchWithTimeout(`http://localhost:3458/api/quotes?symbols=${symbols}`, 6000);
+    if (res.ok) {
+      const json   = await res.json();
+      const quotes = json?.quotes;
+      if (quotes?.length) {
+        quotes.forEach(q => applyPrice(q.symbol, q.price, q.chgPct));
+        const now = new Date().toLocaleTimeString('he-IL', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+        document.getElementById('live-updated').textContent = 'עודכן ב-' + now;
+        setLiveStatus('ok', 'מחירים חיים ✓');
+        return;
+      }
+    }
+  } catch (_) {}
+
+  // Server not running
+  setLiveStatus('error', 'שרת לא פעיל');
+  document.getElementById('live-updated').textContent = '← לחץ פעמיים על start-server.bat';
+}
+
+// Load sectors from CSV first, then start live prices
+loadSectors().then(() => {
+  fetchLivePrices();
+  setInterval(fetchLivePrices, 60000);
+});
+</script>
+</body>
+</html>
