@@ -1,0 +1,57 @@
+name: Update Live Prices
+
+on:
+  schedule:
+    - cron: '*/5 13-21 * * 1-5'  # Every 5 min, Mon-Fri 13:00-21:00 UTC (US market hours)
+  workflow_dispatch:              # Allow manual trigger
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch prices from Yahoo Finance
+        run: |
+          node -e "
+          const https = require('https');
+          const fs    = require('fs');
+          const symbols = ['SPY','SMH','XLE','XLK','XLI','XLU','XLC','XLB','XLY','XLP','XLRE','XLV','XLF'];
+
+          function fetchQuote(symbol) {
+            return new Promise((resolve) => {
+              const url = 'https://query2.finance.yahoo.com/v8/finance/chart/' + symbol + '?interval=1d&range=1d';
+              const req = https.get(url, { headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 8000 }, (res) => {
+                let data = '';
+                res.on('data', c => data += c);
+                res.on('end', () => {
+                  try {
+                    const meta = JSON.parse(data)?.chart?.result?.[0]?.meta;
+                    if (!meta) return resolve(null);
+                    const price  = meta.regularMarketPrice;
+                    const prev   = meta.chartPreviousClose;
+                    const chgPct = prev ? (price - prev) / prev * 100 : 0;
+                    resolve({ symbol, price, chgPct });
+                  } catch { resolve(null); }
+                });
+              });
+              req.on('error', () => resolve(null));
+              req.on('timeout', () => { req.destroy(); resolve(null); });
+            });
+          }
+
+          Promise.all(symbols.map(fetchQuote)).then(results => {
+            const quotes = results.filter(Boolean);
+            fs.writeFileSync('data/prices.json', JSON.stringify({ updatedAt: new Date().toISOString(), quotes }));
+            console.log('Saved', quotes.length, 'quotes');
+          });
+          "
+
+      - name: Commit and push
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/prices.json
+          git diff --staged --quiet && echo "No changes" || (git commit -m "chore: update prices [skip ci]" && git push)
